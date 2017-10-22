@@ -23,25 +23,23 @@ SOFTWARE.
 
 package storage
 
+import "io"
 import "github.com/syndtr/goleveldb/leveldb"
-// import "github.com/nu7hatch/gouuid"
-import "github.com/maxymania/gobase/dataman"
-//import "github.com/vmihailenco/msgpack"
-import "github.com/maxymania/storage-points/msgpackiter"
 
-const(
-	RawType = iota
-	MsgpackType
-	JsonType
-)
-
-type Partition struct{
+type KeyValuePartition interface{
+	Put(id, value []byte) error
+	Get(id []byte, dest io.Writer) error
+}
+type SimplePartition struct{
 	DB *leveldb.DB
-	DM *dataman.DataManagerLocked
 }
-func (p *Partition) InsertObject(buf []byte) {
-	
+func (s *SimplePartition) Put(id, value []byte) error {
+	return s.DB.Put(id,value,nil)
 }
-
-
+func (s *SimplePartition) Get(id []byte, dest io.Writer) error {
+	dbuf,err := s.DB.Get(id,nil)
+	if err!=nil { return err }
+	_,err = dest.Write(dbuf)
+	return err
+}
 
