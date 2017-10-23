@@ -23,10 +23,11 @@ SOFTWARE.
 
 package service
 
-import "github.com/maxymania/storage-points/storage"
+import "github.com/maxymania/storage-points/storage/loader"
 import "github.com/valyala/fasthttp"
 import "bytes"
 import "fmt"
+import "github.com/json-iterator/go"
 
 // '/c9c935b3-0a1c-40c1-75a6-61df8dda3ec4/ObjectName'
 // '/all/ObjectName'
@@ -39,15 +40,14 @@ func split(b []byte,c byte) (a1,a2 []byte) {
 }
 
 
-type Partition struct{
-	KVP storage.KeyValuePartition
-}
-
 type ServiceHandler struct{
-	Partitions map[string]Partition
+	Partitions map[string]loader.Partition
 }
 func (s *ServiceHandler) Init() {
-	s.Partitions = make(map[string]Partition)
+	s.Partitions = make(map[string]loader.Partition)
+}
+func (s *ServiceHandler) Add(ld *loader.Partition) {
+	s.Partitions[ld.Name] = *ld
 }
 func (s *ServiceHandler) Handle(ctx *fasthttp.RequestCtx){
 	_,path := split(ctx.Path(),'/')
@@ -70,14 +70,44 @@ func (s *ServiceHandler) Handle(ctx *fasthttp.RequestCtx){
 			ctx.Error("Not found\n", fasthttp.StatusNotFound)
 			return
 		}
+	case "":
+		switch string(ctx.Method()) {
+		case "GET":
+			{
+				stream := jsoniter.NewStream(jsoniter.ConfigFastest,ctx,512)
+				stream.WriteObjectStart()
+				stream.WriteObjectField("paritions")
+				stream.WriteArrayStart()
+				more := false
+				for k := range s.Partitions {
+					stream.WriteString(k)
+					if more { stream.WriteMore() } else { more = true }
+				}
+				stream.WriteArrayEnd()
+				stream.WriteObjectEnd()
+				stream.Flush()
+				return
+			}
+		}
 	}
 	if partition,ok := s.Partitions[string(part)] ; ok {
-		
-		
+		if len(sub)==0 {
+			switch string(ctx.Method()) {
+			case "GET":
+				{
+					stream := jsoniter.NewStream(jsoniter.ConfigFastest,ctx,512)
+					stream.WriteObjectStart()
+					stream.WriteObjectEnd()
+					stream.Flush()
+					return
+				}
+			}
+		}
 		switch string(ctx.Method()) {
 		case "GET":
 			{
 				err := partition.KVP.Get(sub,ctx)
+				fmt.Println(err)
 				if err!=nil { ctx.Error("Not found\n", fasthttp.StatusNotFound) }
 				return
 			}

@@ -24,16 +24,37 @@ SOFTWARE.
 package storage
 
 import "io"
-import "errors"
+import "github.com/syndtr/goleveldb/leveldb"
+import . "github.com/maxymania/storage-points/storage"
+import "github.com/maxymania/storage-points/storage/loader"
+import "path/filepath"
+import "os"
 
-var ENotFound = errors.New("ErrorNotFound")
-
-type KeyValuePartition interface{
-	Put(id, value []byte) error
-	Get(id []byte, dest io.Writer) error
+type SimplePartition struct{
+	DB *leveldb.DB
 }
-type KVP_Factory interface{
-	OpenKVP(path string) (KeyValuePartition,error)
+func (s *SimplePartition) Put(id, value []byte) error {
+	return s.DB.Put(id,value,nil)
+}
+func (s *SimplePartition) Get(id []byte, dest io.Writer) error {
+	dbuf,err := s.DB.Get(id,nil)
+	if err!=nil {
+		if err==leveldb.ErrNotFound { err = ENotFound }
+		return err
+	}
+	_,err = dest.Write(dbuf)
+	return err
+}
+type SimplePartitionFactory struct{}
+func (s SimplePartitionFactory) OpenKVP(path string) (KeyValuePartition,error) {
+	ldb := filepath.Join(path,"leveldb")
+	os.Mkdir(ldb, 0600)
+	db,err := leveldb.OpenFile(ldb,nil)
+	if err!=nil { return nil,err }
+	return &SimplePartition{db},nil
 }
 
+func init(){
+	loader.Backends["leveldb"] = SimplePartitionFactory{}
+}
 

@@ -21,19 +21,30 @@ SOFTWARE.
 */
 
 
-package storage
+package loader
 
-import "io"
+import "github.com/maxymania/storage-points/storage"
+import "github.com/maxymania/storage-points/guido"
 import "errors"
 
-var ENotFound = errors.New("ErrorNotFound")
+var ENoSuchBackend = errors.New("No such backend")
+var Backends = make(map[string]storage.KVP_Factory)
 
-type KeyValuePartition interface{
-	Put(id, value []byte) error
-	Get(id []byte, dest io.Writer) error
+type Partition struct{
+	Name string
+	KVP  storage.KeyValuePartition
 }
-type KVP_Factory interface{
-	OpenKVP(path string) (KeyValuePartition,error)
+func Load(name, path string) (*Partition,error) {
+	bak,ok := Backends[name]
+	if !ok { return nil,ENoSuchBackend }
+	id,err := guido.GetUID(path)
+	if err!=nil { return nil,err }
+	kvp,err := bak.OpenKVP(path)
+	if err!=nil { return nil,err }
+	
+	p := new(Partition)
+	p.Name = id.String()
+	p.KVP = kvp
+	return p,nil
 }
-
 
