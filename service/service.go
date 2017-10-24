@@ -28,7 +28,6 @@ import "github.com/maxymania/storage-points/storage/loader"
 import "github.com/valyala/fasthttp"
 import "bytes"
 import "sync"
-//import "fmt"
 import "github.com/json-iterator/go"
 import "time"
 
@@ -40,6 +39,11 @@ func split(b []byte,c byte) (a1,a2 []byte) {
 	i := bytes.IndexByte(b,c)
 	if i<0 { return b,nil }
 	return b[:i],b[i+1:]
+}
+
+type comboLock struct{
+	sync.WaitGroup
+	sync.Mutex
 }
 
 type Peer struct{
@@ -57,6 +61,8 @@ type ServiceHandler struct{
 }
 func (s *ServiceHandler) Init() {
 	s.Partitions = make(map[string]loader.Partition)
+	s.peers      = make(map[string]*Peer)
+	s.peerParts  = make(map[string]string)
 }
 func (s *ServiceHandler) Add(ld *loader.Partition) {
 	s.Partitions[ld.Name] = *ld
@@ -79,8 +85,7 @@ func (s *ServiceHandler) Handle(ctx *fasthttp.RequestCtx){
 	_,path := split(ctx.Path(),'/')
 	part,path := split(path,'/')
 	sub,path := split(path,'/')
-	//if i<0 { ctx.Error("Unsupported path", fasthttp.StatusNotFound) ; return }
-	//fmt.Printf("%q /%q/%q/%q\n",ctx.Method(),part,sub,path)
+	
 	switch string(part) {
 	case "all":
 		switch string(ctx.Method()) {
@@ -93,8 +98,48 @@ func (s *ServiceHandler) Handle(ctx *fasthttp.RequestCtx){
 				ctx.Response.Header.Set("Partition", n)
 				return
 			}
+			
 			ctx.Error("Not found\n", fasthttp.StatusNotFound)
 			ctx.Response.Header.Set("Error-404", "key")
+			
+			if string(ctx.Request.Header.Peek("No-Hops"))!="True" {
+				// At this point The  "No-Hops: True" -Header is not set.
+				
+				// We got to loop trough all nodes
+				req := fasthttp.AcquireRequest()
+				ctx.Request.CopyTo(req)
+				req.Header.Set("No-Hops","True")
+				
+				tmo := time.Now().Add(time.Second)
+				
+				// So, at this point, we are going to process, all requests in parralel.
+				wg := new(comboLock)
+				performer := func(peer *Peer) {
+					defer wg.Done()
+					resp := fasthttp.AcquireResponse()
+					err := peer.Client.DoDeadline(req,resp,tmo)
+					if err!=nil && resp.StatusCode()==200 {
+						wg.Lock(); defer wg.Unlock()
+						resp.CopyTo(&ctx.Response)
+					}
+					fasthttp.ReleaseResponse(resp)
+				}
+				
+				// Start the goroutines
+				s.peersLock.RLock()
+				for _,peer := range s.peers {
+					wg.Add(1)
+					go performer(peer)
+				}
+				s.peersLock.RUnlock()
+				
+				
+				// Wait for the goroutines to exit.
+				wg.Wait()
+				
+				//Release the request-object
+				fasthttp.ReleaseRequest(req)
+			}
 			return
 		}
 	case "":
