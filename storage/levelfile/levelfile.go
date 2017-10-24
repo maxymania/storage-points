@@ -276,6 +276,12 @@ func (s *FilePartition) GetFreeSpace() int64 {
 		if num<lastFree { continue }
 		space -= info.Size()
 	}
+	ldb := filepath.Join(s.Path,"levelidx")
+	infos,_ = ioutil.ReadDir(ldb)
+	for _,info := range infos {
+		if info.IsDir() { continue }
+		space -= info.Size()
+	}
 	if space<0 { return 0 }
 	return space
 }
