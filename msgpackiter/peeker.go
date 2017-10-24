@@ -90,9 +90,9 @@ func StringRangeLength(buf []byte) (b,e int) {
 	fb := buf[0]
 	if (fb&0xe0)==0xa0 { return 1,int(fb&0x1f)+1 }
 	switch fb {
-	case 0xd9,0xc4: return 2,int(buf[1])+2
-	case 0xda,0xc5: return 3,int(bE.Uint16(buf[1:]))+3
-	case 0xdb,0xc6: return 5,int(bE.Uint32(buf[1:]))+5
+	case 0xd9,0xc4: if len(buf)<2 { return } ; return 2,int(buf[1])+2
+	case 0xda,0xc5: if len(buf)<3 { return } ; return 3,int(bE.Uint16(buf[1:]))+3
+	case 0xdb,0xc6: if len(buf)<5 { return } ; return 5,int(bE.Uint32(buf[1:]))+5
 	}
 	return
 }
@@ -108,7 +108,7 @@ func ScalarLength(buf []byte) (l int) {
 	case 0xcd,0xd1: return 3
 	case 0xce,0xd2,0xca: return 5
 	case 0xcf,0xd3,0xcb: return 9
-	case 0xd9,0xc4: if len(buf)<1 { return }; return int(buf[1])+2
+	case 0xd9,0xc4: if len(buf)<2 { return }; return int(buf[1])+2
 	case 0xda,0xc5: if len(buf)<3 { return }; return int(bE.Uint16(buf[1:]))+3
 	case 0xdb,0xc6: if len(buf)<5 { return }; return int(bE.Uint32(buf[1:]))+5
 	}

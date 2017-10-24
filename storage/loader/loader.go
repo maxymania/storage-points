@@ -37,6 +37,10 @@ type Partition struct{
 func Load(name, path string) (*Partition,error) {
 	bak,ok := Backends[name]
 	if !ok { return nil,ENoSuchBackend }
+	return LoadCustom(bak,path)
+}
+func LoadCustom(backend storage.KVP_Factory, path string) (*Partition,error) {
+	bak := backend
 	id,err := guido.GetUID(path)
 	if err!=nil { return nil,err }
 	kvp,err := bak.OpenKVP(path)

@@ -27,6 +27,9 @@ import "io"
 import "errors"
 
 var ENotFound = errors.New("ErrorNotFound")
+var EStorageError = errors.New("StorageError")
+
+var EInsertionFailed = errors.New("InsertionFailed")
 
 type KeyValuePartition interface{
 	Put(id, value []byte) error

@@ -54,11 +54,13 @@ func (f *FileEntry) Decr() {
 	}
 }
 func (f *FileEntry) Alloc(size int) (int64, error) {
+	f.lock.Lock(); defer f.lock.Unlock()
 	fsz := f.alloc.FileSize()
 	noGrow := ( f.man.GetMaxFileSize() - fsz ) < int64(size)
 	return f.alloc.Alloc(size,noGrow)
 }
 func (f *FileEntry) Free(off int64) error {
+	f.lock.Lock(); defer f.lock.Unlock()
 	return f.alloc.Free(off)
 }
 func (f *FileEntry) UsableSize(off int64) (int, error) {
@@ -70,6 +72,19 @@ func (f *FileEntry) ApproxFreeSpace() (total int64) {
 	total += f.alloc.ApproxFreeSpace()
 	return
 }
+func (f *FileEntry) ApproxFreeSpaceFor(minSize int) (total int64) {
+	total = f.man.GetMaxFileSize() - f.alloc.FileSize()
+	if total<0 { total = 0 }
+	total += f.alloc.ApproxFreeSpaceFor(minSize)
+	return
+}
+func (f *FileEntry) ReadAt(p []byte, off int64) (n int, err error) {
+	return f.file.ReadAt(p,off)
+}
+func (f *FileEntry) WriteAt(p []byte, off int64) (n int, err error) {
+	return f.file.WriteAt(p,off)
+}
+
 
 type StorageManager struct{
 	lock sync.Mutex
@@ -122,8 +137,8 @@ func (s *StorageManager) Open(num int64) (*FileEntry,error) {
 	
 	// Get the file from the Cache, if possible.
 	fe,ok := s.mp[num]
-	fe.Incr()
 	if ok {
+		fe.Incr()
 		if fe.elem!=nil { // Safety first
 			s.list.MoveToFront(fe.elem)
 		}
@@ -138,7 +153,7 @@ func (s *StorageManager) Open(num int64) (*FileEntry,error) {
 	
 	// Allocate a FileEntry  --- (from the pool or new)
 	fe,ok = s.pool.Get().(*FileEntry)
-	if !ok { fe = &FileEntry{man:s} }
+	if !ok { fe = &FileEntry{man:s} } // refc:new(int64),
 	
 	// Set all fields
 	fe.file = llf

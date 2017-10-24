@@ -30,6 +30,6 @@ import "fmt"
 
 type Dir string
 func (d Dir) Open(num int64) (filealloc.File,error) {
-	fn := filepath.Join(string(d),fmt.Sprintf("%06d.dump"))
+	fn := filepath.Join(string(d),fmt.Sprintf("%06d.dat",num))
 	return os.OpenFile(fn,os.O_CREATE|os.O_RDWR,0600)
 }

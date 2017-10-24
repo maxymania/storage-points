@@ -34,6 +34,9 @@ type SimplePartition struct{
 	DB *leveldb.DB
 }
 func (s *SimplePartition) Put(id, value []byte) error {
+	if len(value)==0 {
+		return s.DB.Delete(id,nil)
+	}
 	return s.DB.Put(id,value,nil)
 }
 func (s *SimplePartition) Get(id []byte, dest io.Writer) error {
