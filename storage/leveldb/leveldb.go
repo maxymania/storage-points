@@ -48,7 +48,7 @@ func (s *SimplePartition) Get(id []byte, dest io.Writer) error {
 type SimplePartitionFactory struct{}
 func (s SimplePartitionFactory) OpenKVP(path string) (KeyValuePartition,error) {
 	ldb := filepath.Join(path,"leveldb")
-	os.Mkdir(ldb, 0600)
+	os.Mkdir(ldb, 0700)
 	db,err := leveldb.OpenFile(ldb,nil)
 	if err!=nil { return nil,err }
 	return &SimplePartition{db},nil
