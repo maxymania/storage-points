@@ -201,8 +201,9 @@ func (s *ServiceHandler) Handle(ctx *fasthttp.RequestCtx){
 				} else if err!=nil {
 					ctx.Error("Insertion Failed\n", fasthttp.StatusInternalServerError)
 					ctx.Response.Header.Set("Error-500", "IO")
+				} else {
+					ctx.Error("OK\n", 200)
 				}
-				ctx.Error("OK\n", 200)
 				return
 			}
 		}
