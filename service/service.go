@@ -23,11 +23,14 @@ SOFTWARE.
 
 package service
 
+import "github.com/maxymania/storage-points/storage"
 import "github.com/maxymania/storage-points/storage/loader"
 import "github.com/valyala/fasthttp"
 import "bytes"
-import "fmt"
+import "sync"
+//import "fmt"
 import "github.com/json-iterator/go"
+import "time"
 
 // '/c9c935b3-0a1c-40c1-75a6-61df8dda3ec4/ObjectName'
 // '/all/ObjectName'
@@ -39,9 +42,18 @@ func split(b []byte,c byte) (a1,a2 []byte) {
 	return b[:i],b[i+1:]
 }
 
+type Peer struct{
+	Name       string
+	Client     PeerClient
+	Partitions []string
+}
 
 type ServiceHandler struct{
 	Partitions map[string]loader.Partition
+	
+	peersLock sync.RWMutex
+	peers     map[string]*Peer
+	peerParts map[string]string
 }
 func (s *ServiceHandler) Init() {
 	s.Partitions = make(map[string]loader.Partition)
@@ -49,12 +61,26 @@ func (s *ServiceHandler) Init() {
 func (s *ServiceHandler) Add(ld *loader.Partition) {
 	s.Partitions[ld.Name] = *ld
 }
+func (s *ServiceHandler) AddOrUpdatePeer(peer *Peer) {
+	s.peersLock.Lock(); defer s.peersLock.Unlock()
+	n := peer.Name
+	for k,v := range s.peerParts { if n==v { delete(s.peerParts,k) } }
+	s.peers[n] = peer
+	for _,k := range peer.Partitions { s.peerParts[k] = n }
+}
+func (s *ServiceHandler) lookupPartitionPeer(part []byte) *Peer {
+	s.peersLock.RLock(); defer s.peersLock.RUnlock()
+	n,ok := s.peerParts[string(part)]
+	if !ok { return nil }
+	return s.peers[n]
+}
+
 func (s *ServiceHandler) Handle(ctx *fasthttp.RequestCtx){
 	_,path := split(ctx.Path(),'/')
 	part,path := split(path,'/')
 	sub,path := split(path,'/')
 	//if i<0 { ctx.Error("Unsupported path", fasthttp.StatusNotFound) ; return }
-	fmt.Printf("%q /%q/%q/%q\n",ctx.Method(),part,sub,path)
+	//fmt.Printf("%q /%q/%q/%q\n",ctx.Method(),part,sub,path)
 	switch string(part) {
 	case "all":
 		switch string(ctx.Method()) {
@@ -68,6 +94,7 @@ func (s *ServiceHandler) Handle(ctx *fasthttp.RequestCtx){
 				return
 			}
 			ctx.Error("Not found\n", fasthttp.StatusNotFound)
+			ctx.Response.Header.Set("Error-404", "key")
 			return
 		}
 	case "":
@@ -80,8 +107,8 @@ func (s *ServiceHandler) Handle(ctx *fasthttp.RequestCtx){
 				stream.WriteArrayStart()
 				more := false
 				for k := range s.Partitions {
-					stream.WriteString(k)
 					if more { stream.WriteMore() } else { more = true }
+					stream.WriteString(k)
 				}
 				stream.WriteArrayEnd()
 				stream.WriteObjectEnd()
@@ -107,21 +134,46 @@ func (s *ServiceHandler) Handle(ctx *fasthttp.RequestCtx){
 		case "GET":
 			{
 				err := partition.KVP.Get(sub,ctx)
-				fmt.Println(err)
-				if err!=nil { ctx.Error("Not found\n", fasthttp.StatusNotFound) }
+				if err==storage.ENotFound {
+					ctx.Error("Not found\n", fasthttp.StatusNotFound)
+					ctx.Response.Header.Set("Error-404", "key")
+				} else if err==storage.EStorageError {
+					ctx.Error("Storage Error\n", fasthttp.StatusInternalServerError)
+					ctx.Response.Header.Set("Error-500", "storage-corruption")
+				} else if err!=nil {
+					ctx.Error("Storage or IO Error\n", fasthttp.StatusInternalServerError)
+					ctx.Response.Header.Set("Error-500", "IO")
+				}
 				return
 			}
 		case "PUT":
 			{
 				err := partition.KVP.Put(sub,ctx.Request.Body())
-				if err!=nil { ctx.Error("Not found\n", fasthttp.StatusNotFound) }
+				if err==storage.EInsertionFailed {
+					ctx.Error("Insertion Failed (Out of Storage)\n", fasthttp.StatusInsufficientStorage)
+				} else if err!=nil {
+					ctx.Error("Insertion Failed\n", fasthttp.StatusInternalServerError)
+					ctx.Response.Header.Set("Error-500", "IO")
+				}
 				ctx.Error("OK\n", 200)
 				return
 			}
 		}
 	}
+	if peer := s.lookupPartitionPeer(part) ; peer!=nil {
+		if string(ctx.Request.Header.Peek("No-Hops"))=="True" { // Circle detected
+			ctx.Error("Circular Reference\n", fasthttp.StatusVariantAlsoNegotiates)
+			return
+		}
+		
+		ctx.Request.Header.Set("No-Hops","True")
+		err := peer.Client.DoDeadline(&ctx.Request, &ctx.Response, time.Now().Add(time.Second) )
+		if err!=nil { ctx.Error("Bad Gateway\n", fasthttp.StatusBadGateway) }
+		return
+	}
 	
-	ctx.Error("Unsupported path\n", fasthttp.StatusNotImplemented) // StatusNotFound
+	ctx.Error("No such partition\n", fasthttp.StatusNotFound)
+	ctx.Response.Header.Set("Error-404", "partition")
 }
 
 
