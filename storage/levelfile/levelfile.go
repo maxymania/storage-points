@@ -24,6 +24,7 @@ SOFTWARE.
 package levelfile
 
 import "io"
+import "io/ioutil"
 import "os"
 import "path/filepath"
 import "encoding/binary"
@@ -39,12 +40,16 @@ import mpacki "github.com/maxymania/storage-points/msgpackiter"
 
 import "github.com/byte-mug/golibs/buffer"
 import "sync"
+import "fmt"
 
 type FilePartition struct{
 	DB *leveldb.DB
 	SM filestore.StorageManager
 	
-	MinSize int
+	MinSize      int
+	MaxFileSpace int64
+	
+	Path         string
 	
 	// Synchronized group
 	locker sync.Mutex
@@ -254,14 +259,32 @@ func (s *FilePartition) Get(id []byte, dest io.Writer) error {
 	_,err = dest.Write(dbuf)
 	return err
 }
-
-
-
+func (s *FilePartition) GetFreeSpace() int64 {
+	if s.MaxFileSpace==0 { return 0 }
+	space := s.MaxFileSpace
+	infos,err := ioutil.ReadDir(s.Path)
+	if err!=nil { return 0 }
+	s.locker.Lock()
+		for _,sp := range s.freeMap {
+			space -= s.SM.MaxFileSize-sp
+		}
+		lastFree := s.lastFree
+	s.locker.Unlock()
+	var num int64
+	for _,info := range infos {
+		if _,err := fmt.Sscanf(info.Name(),"%06d.dat",&num); err!=nil { continue }
+		if num<lastFree { continue }
+		space -= info.Size()
+	}
+	if space<0 { return 0 }
+	return space
+}
 
 type Config struct{
 	MinSize      int
 	MaxOpenFiles int
 	MaxFileSize  int64
+	MaxFileSpace int64
 }
 func (s *Config) OpenKVP(path string) (storage.KeyValuePartition,error) {
 	ldb := filepath.Join(path,"levelidx")
@@ -273,6 +296,7 @@ func (s *Config) OpenKVP(path string) (storage.KeyValuePartition,error) {
 	fp.SM.Init(filestore.Dir(path))
 	fp.SM.MaxOpenFiles = s.MaxOpenFiles
 	fp.SM.MaxFileSize  = s.MaxFileSize
+	fp.MaxFileSpace    = s.MaxFileSpace
 	fp.MinSize         = s.MinSize
 	fp.freeMap = make(map[int64]int64)
 	return fp,nil

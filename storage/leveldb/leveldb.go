@@ -48,6 +48,8 @@ func (s *SimplePartition) Get(id []byte, dest io.Writer) error {
 	_,err = dest.Write(dbuf)
 	return err
 }
+func (s *SimplePartition) GetFreeSpace() int64 { return 0 }
+
 type SimplePartitionFactory struct{}
 func (s SimplePartitionFactory) OpenKVP(path string) (KeyValuePartition,error) {
 	ldb := filepath.Join(path,"leveldb")

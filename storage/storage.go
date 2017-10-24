@@ -34,6 +34,7 @@ var EInsertionFailed = errors.New("InsertionFailed")
 type KeyValuePartition interface{
 	Put(id, value []byte) error
 	Get(id []byte, dest io.Writer) error
+	GetFreeSpace() int64
 }
 type KVP_Factory interface{
 	OpenKVP(path string) (KeyValuePartition,error)
