@@ -298,7 +298,8 @@ func (s *Config) OpenKVP(path string) (storage.KeyValuePartition,error) {
 	fp.SM.MaxFileSize  = s.MaxFileSize
 	fp.MaxFileSpace    = s.MaxFileSpace
 	fp.MinSize         = s.MinSize
-	fp.freeMap = make(map[int64]int64)
+	fp.Path            = path
+	fp.freeMap         = make(map[int64]int64)
 	return fp,nil
 }
 
@@ -306,6 +307,7 @@ func init(){
 	loader.Backends["levelfile"] = &Config{
 		MinSize: 64,
 		MaxOpenFiles: 100,
+		MaxFileSpace: 1<<30,
 	}
 }
 

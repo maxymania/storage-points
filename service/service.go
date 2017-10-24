@@ -169,6 +169,8 @@ func (s *ServiceHandler) Handle(ctx *fasthttp.RequestCtx){
 				{
 					stream := jsoniter.NewStream(jsoniter.ConfigFastest,ctx,512)
 					stream.WriteObjectStart()
+					stream.WriteObjectField("freespace")
+					stream.WriteInt64(partition.KVP.GetFreeSpace())
 					stream.WriteObjectEnd()
 					stream.Flush()
 					return
