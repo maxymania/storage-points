@@ -77,7 +77,7 @@ func (s *FilePartition) findFree(n int) (int64,int64,*filestore.FileEntry) {
 	// look forward after last-free
 	for {
 		k := s.lastFree
-		if ((k+1)*s.SM.GetMaxFileSize()) >= s.MaxFileSpace { break } // Out of space
+		if ((k+1)*s.SM.GetMaxFileSize()) > s.MaxFileSpace { break } // Out of space
 		
 		s.lastFree = k+1
 		fobj,err := s.SM.Open(k)
@@ -310,7 +310,7 @@ func (s *Config) OpenKVP(path string) (storage.KeyValuePartition,error) {
 	fp.Path            = path
 	fp.freeMap         = make(map[int64]int64)
 	
-	if fp.SM.GetMaxFileSize() < fp.MaxFileSpace { fp.SM.MaxFileSize = fp.MaxFileSpace }
+	if fp.SM.GetMaxFileSize() > fp.MaxFileSpace { fp.SM.MaxFileSize = fp.MaxFileSpace }
 	return fp,nil
 }
 
