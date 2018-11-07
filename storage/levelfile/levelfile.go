@@ -35,7 +35,7 @@ import "github.com/maxymania/storage-points/storage/loader"
 
 import "github.com/maxymania/storage-points/storage/filestore"
 
-import "github.com/vmihailenco/msgpack"
+import "github.com/byte-mug/golibs/msgpackx"
 import mpacki "github.com/maxymania/storage-points/msgpackiter"
 
 import "github.com/byte-mug/golibs/buffer"
@@ -177,13 +177,13 @@ func (s *FilePartition) Put(id, value []byte) error {
 		}
 		
 		if len(value)<s.MinSize {
-			stuff,_ := msgpack.Marshal(value)
+			stuff,_ := msgpackx.Marshal(value)
 			err = s.DB.Put(id,stuff,nil)
 			if err!=nil { return err }
 		} else {
 			nnum,noff,err := s.insert(value)
 			if err!=nil { return err }
-			stuff,_ := msgpack.Marshal(nnum,noff)
+			stuff,_ := msgpackx.Marshal(nnum,noff)
 			err = s.DB.Put(id,stuff,nil)
 			if err!=nil { s.free2(nnum,noff) ; return err }
 		}
@@ -200,13 +200,13 @@ func (s *FilePartition) Put(id, value []byte) error {
 	}
 	
 	if len(value)<s.MinSize {
-		stuff,_ := msgpack.Marshal(value)
+		stuff,_ := msgpackx.Marshal(value)
 		err = s.DB.Put(id,stuff,nil)
 		if err!=nil { return err }
 	} else {
 		nnum,noff,err := s.insert(value)
 		if err!=nil { return err }
-		stuff,_ := msgpack.Marshal(nnum,noff)
+		stuff,_ := msgpackx.Marshal(nnum,noff)
 		err = s.DB.Put(id,stuff,nil)
 		if err!=nil { s.free2(nnum,noff) ; return err }
 	}
